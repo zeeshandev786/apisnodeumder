@@ -146,13 +146,15 @@
 
   <script>
     // Read URL query parameters
-    // Example: /pay.html?product=Web+Dev+Service&amount=99.99&currency=usd&desc=One-time+project
+    // Example: /pay.html?product=Web+Dev&amount=99.99&userId=USER_UID&userEmail=user@email.com&desc=One-time+project
     const params = new URLSearchParams(window.location.search);
 
-    const PRODUCT   = params.get('product')  || 'Premium Plan';
-    const UNIT_PRICE = parseFloat(params.get('amount'))  || 29.99;
+    const PRODUCT    = params.get('product')   || 'Premium Plan';
+    const UNIT_PRICE = parseFloat(params.get('amount')) || 29.99;
     const CURRENCY   = (params.get('currency') || 'usd').toUpperCase();
-    const DESC       = params.get('desc')    || '';
+    const DESC       = params.get('desc')      || '';
+    const USER_ID    = params.get('userId')    || '';   // Firebase UID → used to update isPaid
+    const USER_EMAIL = params.get('userEmail') || '';
 
     // Populate page on load
     document.getElementById('productName').textContent = PRODUCT;
@@ -180,9 +182,11 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             productName: PRODUCT,
-            amount: UNIT_PRICE,
-            currency: CURRENCY.toLowerCase(),
-            quantity: qty,
+            amount:      UNIT_PRICE,
+            currency:    CURRENCY.toLowerCase(),
+            quantity:    qty,
+            userId:      USER_ID,     // passed to Stripe metadata → webhook updates Firestore
+            userEmail:   USER_EMAIL,
           }),
         });
 

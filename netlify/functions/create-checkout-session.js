@@ -8,7 +8,14 @@ exports.handler = async (event) => {
   }
 
   try {
-    const { productName, amount, currency = 'usd', quantity = 1 } = JSON.parse(event.body || '{}');
+    const {
+      productName,
+      amount,
+      currency = 'usd',
+      quantity = 1,
+      userId = '',        // Firebase user UID — stored in Stripe metadata
+      userEmail = '',
+    } = JSON.parse(event.body || '{}');
 
     if (!productName || !amount) {
       return {
@@ -31,8 +38,15 @@ exports.handler = async (event) => {
         },
       ],
       mode: 'payment',
+      customer_email: userEmail || undefined,
+      // Store userId so the webhook can update Firestore
+      metadata: {
+        userId,
+        productName,
+        amount: String(amount),
+      },
       success_url: `${SITE_URL}/success.html?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${SITE_URL}/cancel.html`,
+      cancel_url:  `${SITE_URL}/cancel.html`,
     });
 
     return {

@@ -5,19 +5,25 @@ const path = require('path');
 const requestLogger = require('./src/middlewares/requestLogger');
 const { notFound, errorHandler } = require('./src/middlewares/errorHandler');
 const routes = require('./src/routes');
+const { stripeWebhook } = require('./src/controllers/paymentController');
 
 const app = express();
 
-// Security & parsing
+// Security
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors());
+
+// ⚠️  Stripe webhook must receive raw body — BEFORE express.json()
+app.post('/api/payment/webhook', express.raw({ type: 'application/json' }), stripeWebhook);
+
+// JSON & form parsing for all other routes
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
 // Logging
 app.use(requestLogger);
 
-// Serve static HTML pages (pay.html, success.html, cancel.html)
+// Static pages
 app.use(express.static(path.join(__dirname, 'public')));
 
 // API routes
