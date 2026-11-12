@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Payment</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f0f4ff;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .container { width: 100%; max-width: 480px; padding: 16px; }
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.10);
+      overflow: hidden;
+    }
+    .card-header {
+      background: linear-gradient(135deg, #635bff, #0a2540);
+      color: #fff;
+      padding: 32px 32px 24px;
+    }
+    .card-header .label { font-size: 12px; letter-spacing: 1px; text-transform: uppercase; opacity: 0.7; }
+    .card-header h1 { font-size: 28px; font-weight: 700; margin-top: 4px; }
+    .card-header p { margin-top: 6px; opacity: 0.8; font-size: 14px; }
+    .card-body { padding: 32px; }
+    .product-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .product-row:last-of-type { border-bottom: none; }
+    .product-name { font-weight: 600; color: #1a1a2e; font-size: 15px; }
+    .product-desc { font-size: 12px; color: #888; margin-top: 2px; }
+    .product-price { font-size: 20px; font-weight: 700; color: #635bff; }
+    .qty-control {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 24px 0 16px;
+    }
+    .qty-control label { font-size: 14px; color: #555; font-weight: 500; }
+    .qty-control input {
+      width: 70px;
+      border: 1.5px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 7px 12px;
+      font-size: 15px;
+      text-align: center;
+      outline: none;
+    }
+    .qty-control input:focus { border-color: #635bff; }
+    .total-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #f7f7ff;
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 24px;
+    }
+    .total-row .total-label { font-size: 14px; color: #555; }
+    .total-row .total-amount { font-size: 22px; font-weight: 800; color: #1a1a2e; }
+    .btn-pay {
+      width: 100%;
+      background: #635bff;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 15px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .btn-pay:hover { background: #4f46e5; }
+    .btn-pay:active { transform: scale(0.98); }
+    .btn-pay:disabled { background: #a0a0a0; cursor: not-allowed; }
+    .secure-note {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin-top: 16px;
+      font-size: 12px;
+      color: #aaa;
+    }
+    .error { color: #e53e3e; font-size: 13px; margin-top: 10px; text-align: center; display: none; }
+    .spinner { width: 18px; height: 18px; border: 3px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="card-header">
+        <div class="label">Secure Checkout</div>
+        <h1>Complete Payment</h1>
+        <p>Powered by Stripe — test mode</p>
+      </div>
+      <div class="card-body">
+        <div class="product-row">
+          <div>
+            <div class="product-name" id="productName">Loading...</div>
+            <div class="product-desc" id="productDesc"></div>
+          </div>
+          <div class="product-price" id="unitPrice">—</div>
+        </div>
+
+        <div class="qty-control">
+          <label for="qty">Quantity:</label>
+          <input type="number" id="qty" value="1" min="1" max="99" oninput="updateTotal()" />
+        </div>
+
+        <div class="total-row">
+          <span class="total-label">Total due today</span>
+          <span class="total-amount" id="totalAmount">—</span>
+        </div>
+
+        <button class="btn-pay" id="payBtn" onclick="pay()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+          Pay Now
+        </button>
+
+        <div class="error" id="errorMsg"></div>
+
+        <div class="secure-note">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          256-bit SSL encryption · Powered by Stripe
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Read URL query parameters
+    // Example: /pay.html?product=Web+Dev+Service&amount=99.99&currency=usd&desc=One-time+project
+    const params = new URLSearchParams(window.location.search);
+
+    const PRODUCT   = params.get('product')  || 'Premium Plan';
+    const UNIT_PRICE = parseFloat(params.get('amount'))  || 29.99;
+    const CURRENCY   = (params.get('currency') || 'usd').toUpperCase();
+    const DESC       = params.get('desc')    || '';
+
+    // Populate page on load
+    document.getElementById('productName').textContent = PRODUCT;
+    document.getElementById('productDesc').textContent = DESC;
+    document.getElementById('unitPrice').textContent   = CURRENCY + ' ' + UNIT_PRICE.toFixed(2);
+    document.getElementById('totalAmount').textContent = CURRENCY + ' ' + UNIT_PRICE.toFixed(2);
+
+    function updateTotal() {
+      const qty = parseInt(document.getElementById('qty').value) || 1;
+      document.getElementById('totalAmount').textContent = CURRENCY + ' ' + (UNIT_PRICE * qty).toFixed(2);
+    }
+
+    async function pay() {
+      const btn = document.getElementById('payBtn');
+      const errorEl = document.getElementById('errorMsg');
+      const qty = parseInt(document.getElementById('qty').value) || 1;
+
+      btn.disabled = true;
+      btn.innerHTML = '<div class="spinner"></div> Processing...';
+      errorEl.style.display = 'none';
+
+      try {
+        const res = await fetch('/.netlify/functions/create-checkout-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            productName: PRODUCT,
+            amount: UNIT_PRICE,
+            currency: CURRENCY.toLowerCase(),
+            quantity: qty,
+          }),
+        });
+
+        const data = await res.json();
+
+        if (!data.success) throw new Error(data.message || 'Payment failed');
+
+        window.location.href = data.url;
+      } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.style.display = 'block';
+        btn.disabled = false;
+        btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> Pay Now';
+      }
+    }
+  </script>
+</body>
+</html>
