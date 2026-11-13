@@ -90,24 +90,12 @@ const stripeWebhook = async (req, res) => {
       } = session.metadata || {};
 
       if (userId && productId) {
-        const purchasedProduct = {
-          productId,
-          productName:  productName || productId,
-          amount:       (session.amount_total / 100).toFixed(2),
-          currency:     (currency || session.currency || 'USD').toUpperCase(),
-          desc:         desc || '',
-          sessionId:    session.id,
-          email:        session.customer_details?.email || userEmail || '',
-          purchasedAt:  ServerValue.TIMESTAMP,
-        };
-
         try {
           // Single atomic multi-path update to Realtime Database
           await rtdb.ref('users/' + userId).update({
             isPaid:                     true,
             paidAt:                     ServerValue.TIMESTAMP,
-            lastPayment:                purchasedProduct,
-            [`products/${productId}`]:  purchasedProduct,
+            [`products/${productId}`]:  true,
           });
 
           console.log(`[Webhook] ✓ RTDB updated — products/${productId} for user: ${userId}`);
@@ -140,22 +128,10 @@ const verifySession = async (req, res, next) => {
       } = session.metadata || {};
 
       if (userId && productId) {
-        const purchasedProduct = {
-          productId,
-          productName:  productName || productId,
-          amount:       (session.amount_total / 100).toFixed(2),
-          currency:     (currency || session.currency || 'USD').toUpperCase(),
-          desc:         desc || '',
-          sessionId:    session.id,
-          email:        session.customer_details?.email || userEmail || '',
-          purchasedAt:  ServerValue.TIMESTAMP,
-        };
-
         await rtdb.ref('users/' + userId).update({
           isPaid:                     true,
           paidAt:                     ServerValue.TIMESTAMP,
-          lastPayment:                purchasedProduct,
-          [`products/${productId}`]:  purchasedProduct,
+          [`products/${productId}`]:  true,
         });
 
         console.log(`[verify] ✓ RTDB updated — products/${productId} for user: ${userId}`);

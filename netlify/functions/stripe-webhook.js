@@ -64,18 +64,6 @@ exports.handler = async (event) => {
     return { statusCode: 200, body: JSON.stringify({ received: true }) };
   }
 
-  // 4. Build the product object
-  const purchasedProduct = {
-    productId,
-    productName:  productName || productId,
-    amount:       (session.amount_total / 100).toFixed(2),
-    currency:     (currency || session.currency || 'USD').toUpperCase(),
-    desc:         desc || '',
-    sessionId:    session.id,
-    email:        session.customer_details?.email || userEmail || '',
-    purchasedAt:  ServerValue.TIMESTAMP,
-  };
-
   try {
     const rtdb = getRtdb();
 
@@ -83,8 +71,7 @@ exports.handler = async (event) => {
     await rtdb.ref('users/' + userId).update({
       isPaid:                     true,
       paidAt:                     ServerValue.TIMESTAMP,
-      lastPayment:                purchasedProduct,
-      [`products/${productId}`]:  purchasedProduct,
+      [`products/${productId}`]:  true,
     });
 
     console.log(`[Webhook] ✓ RTDB updated — products/${productId} for user: ${userId}`);

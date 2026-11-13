@@ -93,24 +93,9 @@
           const productId = meta.productId;
 
           if (userId && productId && data.status === 'paid') {
-            const purchasedProduct = {
-              productId,
-              productName:  meta.productName || productId,
-              amount:       data.amount_total,
-              currency:     data.currency,
-              desc:         meta.desc || '',
-              sessionId,
-              email:        data.customer_email || meta.userEmail || '',
-              purchasedAt:  Date.now(),
-            };
-
-            // Multi-path PATCH — writes isPaid + products/{productId} in one call
-            const payload = {
-              isPaid:      true,
-              paidAt:      Date.now(),
-              lastPayment: purchasedProduct,
-            };
-            payload[`products/${productId}`] = purchasedProduct;
+            // Multi-path PATCH — writes isPaid + products/{productId}=true in one call
+            const payload = { isPaid: true, paidAt: Date.now() };
+            payload[`products/${productId}`] = true;
 
             await fetch(`${RTDB_URL}/users/${userId}.json`, {
               method:  'PATCH',

@@ -42,25 +42,13 @@ exports.handler = async (event) => {
       } = session.metadata || {};
 
       if (userId && productId) {
-        const purchasedProduct = {
-          productId,
-          productName:  productName || productId,
-          amount:       (session.amount_total / 100).toFixed(2),
-          currency:     (currency || session.currency || 'USD').toUpperCase(),
-          desc:         desc || '',
-          sessionId:    session.id,
-          email:        session.customer_details?.email || userEmail || '',
-          purchasedAt:  ServerValue.TIMESTAMP,
-        };
-
         const rtdb = getRtdb();
 
-        // Atomic multi-path write — sets isPaid + full product object
+        // Atomic multi-path write — sets isPaid + products/{productId}=true
         await rtdb.ref('users/' + userId).update({
           isPaid:                     true,
           paidAt:                     ServerValue.TIMESTAMP,
-          lastPayment:                purchasedProduct,
-          [`products/${productId}`]:  purchasedProduct,
+          [`products/${productId}`]:  true,
         });
 
         console.log(`[verify-session] ✓ RTDB updated — products/${productId} for user: ${userId}`);
