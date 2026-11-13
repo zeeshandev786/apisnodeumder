@@ -1,13 +1,17 @@
 const Stripe = require('stripe');
 const { initializeApp, getApps, cert } = require('firebase-admin/app');
-const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+const { getDatabase, ServerValue }     = require('firebase-admin/database');
 
-function getDb() {
+// Firebase init using env vars (Netlify sets these in dashboard)
+function getRtdb() {
   if (!getApps().length) {
     const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
-    initializeApp({ credential: cert(serviceAccount) });
+    initializeApp({
+      credential:  cert(serviceAccount),
+      databaseURL: process.env.FIREBASE_DATABASE_URL,
+    });
   }
-  return getFirestore();
+  return getDatabase();
 }
 
 exports.handler = async (event) => {
@@ -34,7 +38,7 @@ exports.handler = async (event) => {
     return { statusCode: 400, body: `Webhook Error: ${err.message}` };
   }
 
-  // 2. Only handle completed + paid sessions
+  // 2. Only process completed + paid sessions
   if (stripeEvent.type !== 'checkout.session.completed') {
     return { statusCode: 200, body: JSON.stringify({ received: true }) };
   }
@@ -45,12 +49,11 @@ exports.handler = async (event) => {
     return { statusCode: 200, body: JSON.stringify({ received: true }) };
   }
 
-  // 3. Pull everything we stored in metadata
+  // 3. Pull everything from Stripe metadata
   const {
     userId,
     productId,
     productName,
-    amount,
     currency,
     desc,
     userEmail,
@@ -61,42 +64,33 @@ exports.handler = async (event) => {
     return { statusCode: 200, body: JSON.stringify({ received: true }) };
   }
 
-  // 4. Build the product object that will be saved
+  // 4. Build the product object
   const purchasedProduct = {
     productId,
-    productName:   productName || productId,
-    amount:        (session.amount_total / 100).toFixed(2),
-    currency:      (currency || session.currency).toUpperCase(),
-    desc:          desc || '',
-    sessionId:     session.id,
-    email:         session.customer_details?.email || userEmail || '',
-    purchasedAt:   FieldValue.serverTimestamp(),
+    productName:  productName || productId,
+    amount:       (session.amount_total / 100).toFixed(2),
+    currency:     (currency || session.currency || 'USD').toUpperCase(),
+    desc:         desc || '',
+    sessionId:    session.id,
+    email:        session.customer_details?.email || userEmail || '',
+    purchasedAt:  ServerValue.TIMESTAMP,
   };
 
   try {
-    const db      = getDb();
-    const userRef = db.collection('users').doc(userId);
+    const rtdb = getRtdb();
 
-    // Set top-level payment flags (merge keeps other user fields intact)
-    await userRef.set(
-      {
-        isPaid:      true,
-        paidAt:      FieldValue.serverTimestamp(),
-        lastPayment: purchasedProduct,
-      },
-      { merge: true }
-    );
-
-    // Add product under products.{productId} using dot-notation
-    // so buying a second product never overwrites the first
-    await userRef.update({
-      [`products.${productId}`]: purchasedProduct,
+    // Single atomic multi-path write to Realtime Database
+    await rtdb.ref(userId).update({
+      isPaid:                     true,
+      paidAt:                     ServerValue.TIMESTAMP,
+      lastPayment:                purchasedProduct,
+      [`products/${productId}`]:  purchasedProduct,
     });
 
-    console.log(`[Webhook] ✓ products.${productId} saved for user: ${userId}`);
+    console.log(`[Webhook] ✓ RTDB updated — products/${productId} for user: ${userId}`);
   } catch (err) {
-    console.error('[Webhook] Firestore write failed:', err.message);
-    return { statusCode: 500, body: 'Firestore write failed' };
+    console.error('[Webhook] RTDB write failed:', err.message);
+    return { statusCode: 500, body: 'RTDB write failed' };
   }
 
   return { statusCode: 200, body: JSON.stringify({ received: true }) };

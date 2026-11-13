@@ -1,7 +1,7 @@
 const Stripe = require('stripe');
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
-const { db } = require('../config/firebase');
-const { FieldValue } = require('firebase-admin/firestore');
+const { rtdb } = require('../config/firebase');
+const { ServerValue } = require('firebase-admin/database');
 
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3000';
 
@@ -92,36 +92,27 @@ const stripeWebhook = async (req, res) => {
       if (userId && productId) {
         const purchasedProduct = {
           productId,
-          productName:   productName || productId,
-          amount:        (session.amount_total / 100).toFixed(2),
-          currency:      (currency || session.currency).toUpperCase(),
-          desc:          desc || '',
-          sessionId:     session.id,
-          email:         session.customer_details?.email || userEmail || '',
-          purchasedAt:   FieldValue.serverTimestamp(),
+          productName:  productName || productId,
+          amount:       (session.amount_total / 100).toFixed(2),
+          currency:     (currency || session.currency || 'USD').toUpperCase(),
+          desc:         desc || '',
+          sessionId:    session.id,
+          email:        session.customer_details?.email || userEmail || '',
+          purchasedAt:  ServerValue.TIMESTAMP,
         };
 
         try {
-          const userRef = db.collection('users').doc(userId);
-
-          // Update top-level flags
-          await userRef.set(
-            {
-              isPaid:      true,
-              paidAt:      FieldValue.serverTimestamp(),
-              lastPayment: purchasedProduct,
-            },
-            { merge: true }
-          );
-
-          // Add product entry — dot-notation means multiple products never overwrite each other
-          await userRef.update({
-            [`products.${productId}`]: purchasedProduct,
+          // Single atomic multi-path update to Realtime Database
+          await rtdb.ref(userId).update({
+            isPaid:                     true,
+            paidAt:                     ServerValue.TIMESTAMP,
+            lastPayment:                purchasedProduct,
+            [`products/${productId}`]:  purchasedProduct,
           });
 
-          console.log(`[Webhook] ✓ products.${productId} saved for user: ${userId}`);
+          console.log(`[Webhook] ✓ RTDB updated — products/${productId} for user: ${userId}`);
         } catch (err) {
-          console.error('[Webhook] Firestore write failed:', err.message);
+          console.error('[Webhook] RTDB write failed:', err.message);
         }
       } else {
         console.warn('[Webhook] Missing userId or productId in metadata');

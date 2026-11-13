@@ -1,6 +1,6 @@
 const { initializeApp, getApps, cert } = require('firebase-admin/app');
-const { getFirestore } = require('firebase-admin/firestore');
-const { getAuth } = require('firebase-admin/auth');
+const { getDatabase }  = require('firebase-admin/database');
+const { getAuth }      = require('firebase-admin/auth');
 const path = require('path');
 
 if (!getApps().length) {
@@ -9,13 +9,15 @@ if (!getApps().length) {
   );
 
   initializeApp({
-    credential: cert(serviceAccount),
+    credential:   cert(serviceAccount),
+    databaseURL:  process.env.FIREBASE_DATABASE_URL,
   });
 
   console.log('[Firebase] Connected to project:', serviceAccount.project_id);
+  console.log('[Firebase] RTDB URL:', process.env.FIREBASE_DATABASE_URL);
 }
 
-const db = getFirestore();
+const rtdb = getDatabase();   // Realtime Database
 const auth = getAuth();
 
-module.exports = { db, auth };
+module.exports = { rtdb, auth };
