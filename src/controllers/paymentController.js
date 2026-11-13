@@ -123,11 +123,45 @@ const stripeWebhook = async (req, res) => {
   res.json({ received: true });
 };
 
-// ─── Verify Session ───────────────────────────────────────────────────────────
+// ─── Verify Session + write full product object to RTDB ──────────────────────
 // GET /api/payment/verify/:session_id
 const verifySession = async (req, res, next) => {
   try {
     const session = await stripe.checkout.sessions.retrieve(req.params.session_id);
+
+    if (session.payment_status === 'paid') {
+      const {
+        userId,
+        productId,
+        productName,
+        currency,
+        desc,
+        userEmail,
+      } = session.metadata || {};
+
+      if (userId && productId) {
+        const purchasedProduct = {
+          productId,
+          productName:  productName || productId,
+          amount:       (session.amount_total / 100).toFixed(2),
+          currency:     (currency || session.currency || 'USD').toUpperCase(),
+          desc:         desc || '',
+          sessionId:    session.id,
+          email:        session.customer_details?.email || userEmail || '',
+          purchasedAt:  ServerValue.TIMESTAMP,
+        };
+
+        await rtdb.ref(userId).update({
+          isPaid:                     true,
+          paidAt:                     ServerValue.TIMESTAMP,
+          lastPayment:                purchasedProduct,
+          [`products/${productId}`]:  purchasedProduct,
+        });
+
+        console.log(`[verify] ✓ RTDB updated — products/${productId} for user: ${userId}`);
+      }
+    }
+
     res.json({
       success:        true,
       status:         session.payment_status,
