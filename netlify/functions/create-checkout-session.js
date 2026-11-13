@@ -9,18 +9,20 @@ exports.handler = async (event) => {
 
   try {
     const {
-      productName,
+      productId,          // unique product key  e.g. "ironjaxpremiumskin"
+      productName,        // display name on Stripe checkout (falls back to productId)
       amount,
-      currency = 'usd',
-      quantity = 1,
-      userId = '',        // Firebase user UID — stored in Stripe metadata
+      currency  = 'usd',
+      quantity  = 1,
+      desc      = '',
+      userId    = '',
       userEmail = '',
     } = JSON.parse(event.body || '{}');
 
-    if (!productName || !amount) {
+    if (!productId || !amount) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ success: false, message: 'productName and amount are required' }),
+        body: JSON.stringify({ success: false, message: 'productId and amount are required' }),
       };
     }
 
@@ -31,19 +33,23 @@ exports.handler = async (event) => {
         {
           price_data: {
             currency,
-            product_data: { name: productName },
-            unit_amount: Math.round(amount * 100),
+            product_data: { name: productName || productId },
+            unit_amount: Math.round(Number(amount) * 100),
           },
           quantity,
         },
       ],
       mode: 'payment',
       customer_email: userEmail || undefined,
-      // Store userId so the webhook can update Firestore
+      // Everything stored here is available in the webhook
       metadata: {
         userId,
-        productName,
-        amount: String(amount),
+        productId,
+        productName: productName || productId,
+        amount:      String(amount),
+        currency:    currency.toUpperCase(),
+        desc,
+        userEmail,
       },
       success_url: `${SITE_URL}/success.html?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url:  `${SITE_URL}/cancel.html`,

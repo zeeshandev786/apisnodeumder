@@ -7,21 +7,23 @@ const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3000';
 
 // ─── Create Stripe Checkout Session ──────────────────────────────────────────
 // POST /api/payment/create-checkout-session
-// Body: { productName, amount, currency?, quantity?, userId?, userEmail? }
+// Body: { productId, productName?, amount, currency?, quantity?, desc?, userId?, userEmail? }
 const createCheckoutSession = async (req, res, next) => {
   try {
     const {
+      productId,
       productName,
       amount,
       currency  = 'usd',
       quantity  = 1,
+      desc      = '',
       userId    = '',
       userEmail = '',
     } = req.body;
 
-    if (!productName || !amount) {
+    if (!productId || !amount) {
       res.status(400);
-      throw new Error('productName and amount are required');
+      throw new Error('productId and amount are required');
     }
 
     const session = await stripe.checkout.sessions.create({
@@ -29,15 +31,23 @@ const createCheckoutSession = async (req, res, next) => {
         {
           price_data: {
             currency,
-            product_data: { name: productName },
-            unit_amount: Math.round(amount * 100),
+            product_data: { name: productName || productId },
+            unit_amount: Math.round(Number(amount) * 100),
           },
           quantity,
         },
       ],
       mode: 'payment',
       customer_email: userEmail || undefined,
-      metadata: { userId, productName, amount: String(amount) },
+      metadata: {
+        userId,
+        productId,
+        productName: productName || productId,
+        amount:      String(amount),
+        currency:    currency.toUpperCase(),
+        desc,
+        userEmail,
+      },
       success_url: `${CLIENT_URL}/success.html?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url:  `${CLIENT_URL}/cancel.html`,
     });
@@ -49,21 +59,19 @@ const createCheckoutSession = async (req, res, next) => {
 };
 
 // ─── Stripe Webhook ───────────────────────────────────────────────────────────
-// POST /api/payment/webhook
-// Stripe sends signed events here — verifies signature, then updates Firestore
+// POST /api/payment/webhook  (raw body — registered in app.js before express.json)
 const stripeWebhook = async (req, res) => {
   const sig = req.headers['stripe-signature'];
 
   let event;
   try {
-    // req.body is raw Buffer here (see app.js)
     event = stripe.webhooks.constructEvent(
       req.body,
       sig,
       process.env.STRIPE_WEBHOOK_SECRET
     );
   } catch (err) {
-    console.error('Webhook signature failed:', err.message);
+    console.error('[Webhook] Signature failed:', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
@@ -71,28 +79,52 @@ const stripeWebhook = async (req, res) => {
     const session = event.data.object;
 
     if (session.payment_status === 'paid') {
-      const userId = session.metadata?.userId;
+      const {
+        userId,
+        productId,
+        productName,
+        amount,
+        currency,
+        desc,
+        userEmail,
+      } = session.metadata || {};
 
-      if (userId) {
+      if (userId && productId) {
+        const purchasedProduct = {
+          productId,
+          productName:   productName || productId,
+          amount:        (session.amount_total / 100).toFixed(2),
+          currency:      (currency || session.currency).toUpperCase(),
+          desc:          desc || '',
+          sessionId:     session.id,
+          email:         session.customer_details?.email || userEmail || '',
+          purchasedAt:   FieldValue.serverTimestamp(),
+        };
+
         try {
-          await db.collection('users').doc(userId).set(
+          const userRef = db.collection('users').doc(userId);
+
+          // Update top-level flags
+          await userRef.set(
             {
-              isPaid: true,
-              paidAt: FieldValue.serverTimestamp(),
-              lastPayment: {
-                sessionId:   session.id,
-                productName: session.metadata?.productName || '',
-                amount:      (session.amount_total / 100).toFixed(2),
-                currency:    session.currency?.toUpperCase(),
-                email:       session.customer_details?.email || '',
-              },
+              isPaid:      true,
+              paidAt:      FieldValue.serverTimestamp(),
+              lastPayment: purchasedProduct,
             },
             { merge: true }
           );
-          console.log(`[Webhook] isPaid=true → user: ${userId}`);
+
+          // Add product entry — dot-notation means multiple products never overwrite each other
+          await userRef.update({
+            [`products.${productId}`]: purchasedProduct,
+          });
+
+          console.log(`[Webhook] ✓ products.${productId} saved for user: ${userId}`);
         } catch (err) {
-          console.error('[Webhook] Firestore update failed:', err.message);
+          console.error('[Webhook] Firestore write failed:', err.message);
         }
+      } else {
+        console.warn('[Webhook] Missing userId or productId in metadata');
       }
     }
   }
@@ -106,11 +138,12 @@ const verifySession = async (req, res, next) => {
   try {
     const session = await stripe.checkout.sessions.retrieve(req.params.session_id);
     res.json({
-      success: true,
+      success:        true,
       status:         session.payment_status,
       customer_email: session.customer_details?.email,
       amount_total:   (session.amount_total / 100).toFixed(2),
-      currency:       session.currency,
+      currency:       session.currency?.toUpperCase(),
+      metadata:       session.metadata,
     });
   } catch (err) {
     next(err);

@@ -146,18 +146,19 @@
 
   <script>
     // Read URL query parameters
-    // Example: /pay.html?product=Web+Dev&amount=99.99&userId=USER_UID&userEmail=user@email.com&desc=One-time+project
+    // Example: /pay.html?productId=ironjaxpremiumskin&productName=Iron+Jax+Skin&amount=1.00&currency=usd&desc=Premium+skin&userId=UID&userEmail=user@email.com
     const params = new URLSearchParams(window.location.search);
 
-    const PRODUCT    = params.get('product')   || 'Premium Plan';
-    const UNIT_PRICE = parseFloat(params.get('amount')) || 29.99;
-    const CURRENCY   = (params.get('currency') || 'usd').toUpperCase();
-    const DESC       = params.get('desc')      || '';
-    const USER_ID    = params.get('userId')    || '';   // Firebase UID → used to update isPaid
-    const USER_EMAIL = params.get('userEmail') || '';
+    const PRODUCT_ID   = params.get('productId')   || '';
+    const PRODUCT_NAME = params.get('productName') || params.get('product') || PRODUCT_ID || 'Product';
+    const UNIT_PRICE   = parseFloat(params.get('amount'))   || 0;
+    const CURRENCY     = (params.get('currency') || 'usd').toUpperCase();
+    const DESC         = params.get('desc')        || '';
+    const USER_ID      = params.get('userId')      || '';
+    const USER_EMAIL   = params.get('userEmail')   || '';
 
     // Populate page on load
-    document.getElementById('productName').textContent = PRODUCT;
+    document.getElementById('productName').textContent = PRODUCT_NAME;
     document.getElementById('productDesc').textContent = DESC;
     document.getElementById('unitPrice').textContent   = CURRENCY + ' ' + UNIT_PRICE.toFixed(2);
     document.getElementById('totalAmount').textContent = CURRENCY + ' ' + UNIT_PRICE.toFixed(2);
@@ -181,11 +182,13 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            productName: PRODUCT,
+            productId:   PRODUCT_ID,
+            productName: PRODUCT_NAME,
             amount:      UNIT_PRICE,
             currency:    CURRENCY.toLowerCase(),
             quantity:    qty,
-            userId:      USER_ID,     // passed to Stripe metadata → webhook updates Firestore
+            desc:        DESC,
+            userId:      USER_ID,
             userEmail:   USER_EMAIL,
           }),
         });
