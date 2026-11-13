@@ -80,7 +80,7 @@ exports.handler = async (event) => {
     const rtdb = getRtdb();
 
     // Single atomic multi-path write to Realtime Database
-    await rtdb.ref(userId).update({
+    await rtdb.ref('users/' + userId).update({
       isPaid:                     true,
       paidAt:                     ServerValue.TIMESTAMP,
       lastPayment:                purchasedProduct,

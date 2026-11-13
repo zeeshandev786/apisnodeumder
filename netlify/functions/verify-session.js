@@ -56,7 +56,7 @@ exports.handler = async (event) => {
         const rtdb = getRtdb();
 
         // Atomic multi-path write — sets isPaid + full product object
-        await rtdb.ref(userId).update({
+        await rtdb.ref('users/' + userId).update({
           isPaid:                     true,
           paidAt:                     ServerValue.TIMESTAMP,
           lastPayment:                purchasedProduct,

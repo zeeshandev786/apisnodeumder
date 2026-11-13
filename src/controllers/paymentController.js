@@ -103,7 +103,7 @@ const stripeWebhook = async (req, res) => {
 
         try {
           // Single atomic multi-path update to Realtime Database
-          await rtdb.ref(userId).update({
+          await rtdb.ref('users/' + userId).update({
             isPaid:                     true,
             paidAt:                     ServerValue.TIMESTAMP,
             lastPayment:                purchasedProduct,
@@ -151,7 +151,7 @@ const verifySession = async (req, res, next) => {
           purchasedAt:  ServerValue.TIMESTAMP,
         };
 
-        await rtdb.ref(userId).update({
+        await rtdb.ref('users/' + userId).update({
           isPaid:                     true,
           paidAt:                     ServerValue.TIMESTAMP,
           lastPayment:                purchasedProduct,
